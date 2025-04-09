@@ -1,5 +1,6 @@
 # JX360SaveExtractor
-Extract data from save files of Xbox 360.
+Extract data from save files of Xbox 360.<br>
+Implements a sort of raw STFS file format.
 
 # Data Extracted (Examples)
 <h3>Metadata</h3>
