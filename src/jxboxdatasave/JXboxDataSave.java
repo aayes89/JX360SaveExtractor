@@ -34,11 +34,11 @@ public class JXboxDataSave {
                 FileInputStream fis = new FileInputStream(dataSFile);
                 byte[] fullData = fis.readAllBytes();
 
-                // Parsear el encabezado
+                // Parse header
                 STFSHeader header = new STFSHeader().parseSTFS(dataSFile);
                 displayHeader(header);
 
-                // Extraer archivos embebidos
+                // Extract embedded files
                 List<STFSFileEntry> files = parseFileTable(dataSFile);
                 displayFileTable(files);
 
@@ -56,11 +56,9 @@ public class JXboxDataSave {
     }
 
     public static void extractFileTable(byte[] fullData) {
-        System.out.println("\n----- EMBEDDED FILES -----");
-
-        // La tabla de archivos empieza después del encabezado (offset depende del tamaño del header)
-        int headerSize = 0x3400; // Valor típico para "CON", ajustar según archivo
-        int entrySize = 0x40;    // Tamaño típico de cada entrada en la tabla
+        System.out.println("\n----- EMBEDDED FILES -----");        
+        int headerSize = 0x3400; // Value for "CON", (adjust)
+        int entrySize = 0x40;    // entry table value
         int numEntries = ByteBuffer.wrap(fullData, 0x340, 2).order(ByteOrder.BIG_ENDIAN).getShort();
 
         if (numEntries <= 0 || headerSize + numEntries * entrySize > fullData.length) {
@@ -81,15 +79,15 @@ public class JXboxDataSave {
                 fileName.append((char) b);
             }
 
-            // Tamaño del archivo
+            // Size of file
             int fileSize = ByteBuffer.wrap(fullData, entryOffset + 0x34, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-            // Offset del archivo dentro de los datos
+            // file Offset inside data
             int fileOffset = ByteBuffer.wrap(fullData, entryOffset + 0x38, 4).order(ByteOrder.BIG_ENDIAN).getInt();
 
             System.out.printf("File: %s | Size: %d bytes | Offset: 0x%X\n",
                     fileName.toString(), fileSize, fileOffset);
 
-            // Aquí podrías extraer el archivo a disco si quisieras
+            // TODO: extract file to disk
         }
     }
 
@@ -97,12 +95,12 @@ public class JXboxDataSave {
         System.out.println("--------- HEXDUMP ------------");
         int bytesPerLine = 16;
         for (int i = 0; i < fullData.length; i += bytesPerLine) {
-            System.out.printf("[%08X] ", i); // Offset en 8 dígitos hexadecimales
+            System.out.printf("[%08X] ", i); // Offset 8 bytes hex
             for (int j = 0; j < bytesPerLine; j++) {
                 if (i + j < fullData.length) {
                     System.out.printf("%02X ", fullData[i + j]);
                 } else {
-                    System.out.print("   "); // relleno si la última línea no tiene 16 bytes
+                    System.out.print("   "); // fill with space if not 16 bytes
                 }
             }
             System.out.print("  | ");
@@ -142,7 +140,7 @@ public class JXboxDataSave {
     public static void extractKnownOffsets(byte[] data) {
         System.out.println("\n--------- KNOWN FIELDS (raw) ------------");
 
-        // Ejemplo: extraer 16 bytes desde offset 0x344 para un posible Profile ID
+        // Ej: extract 16 bytes from offset 0x344 to get Profile ID
         int profileIdOffset = 0x344;
         if (data.length >= profileIdOffset + 16) {
             System.out.print("Profile ID (0x344): ");
@@ -152,7 +150,7 @@ public class JXboxDataSave {
             System.out.println();
         }
 
-        // Display Name desde offset 0x4110 (usualmente 32 bytes, UTF-16LE)
+        // Display Name from offset 0x4110 (usually 32 bytes, UTF-16LE)
         int nameOffset = 0x4110;
         if (data.length >= nameOffset + 64) {
             System.out.print("Display Name (UTF-16LE, 0x4110): ");
@@ -195,20 +193,20 @@ public class JXboxDataSave {
         try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
             raf.seek(0x340);
             int numEntries = raf.readShort() & 0xFFFF;
-            System.out.println("\n----- Extraer Archivos embebidos -----");
-            System.out.println("Número de entradas en 0x340: " + numEntries);
+            System.out.println("\n----- Extracting embedded files -----");
+            System.out.println("Entries on 0x340: " + numEntries);
 
             if (numEntries <= 0 || numEntries > 1000) {
                 System.out.println("No valid file table found. Num entries: " + numEntries);
                 return entries;
             }
 
-            // Leer la tabla de archivos (después de los 2 bytes de numEntries)
-            raf.seek(0x342); // Ajustar posición después del contador
+            // Read file table
+            raf.seek(0x342); // Adjust position
             for (int i = 0; i < numEntries; i++) {
                 STFSFileEntry entry = new STFSFileEntry();
 
-                // Nombre del archivo (40 bytes, termina con 0x00)
+                // File name (40 bytes, ends with 0x00)
                 byte[] nameBytes = new byte[40];
                 raf.readFully(nameBytes);
                 int nameLength = 0;
@@ -220,23 +218,23 @@ public class JXboxDataSave {
                 }
                 entry.filename = new String(nameBytes, 0, nameLength, "UTF-8");
 
-                // Tamaño del archivo (4 bytes)
+                // file size (4 bytes)
                 entry.size = raf.readInt();
 
-                // Bloque inicial (3 bytes, pero leemos como int y ajustamos)
+                // initial bloq (3 bytes)
                 byte[] blockBytes = new byte[3];
                 raf.readFully(blockBytes);
                 entry.startingBlock = ((blockBytes[0] & 0xFF) << 16) | ((blockBytes[1] & 0xFF) << 8) | (blockBytes[2] & 0xFF);
 
-                // Saltar bytes reservados (ajustar según estructura STFS)
-                raf.skipBytes(9); // Ajustar según el formato exacto
+                // jump reserved bytes (adjust to STFS)
+                raf.skipBytes(9); // Adjust as format STFS
 
                 entries.add(entry);
             }
 
-            // Leer contenido de cada archivo
+            // Read file content
             for (STFSFileEntry entry : entries) {
-                long offset = entry.startingBlock * 0x1000L; // Bloques de 4KB
+                long offset = entry.startingBlock * 0x1000L; // 4KB bloqs
                 raf.seek(offset);
                 entry.content = new byte[entry.size];
                 raf.readFully(entry.content);
@@ -260,18 +258,18 @@ public class JXboxDataSave {
         }
     }
 
-    private static void crearDirectorio(File file, String nombre) {
-        // Generar directorio
-        File rootDir = new File(file.getParent(), nombre);
+    private static void crearDirectorio(File file, String name) {
+        // create dir
+        File rootDir = new File(file.getParent(), name);
         if (!rootDir.exists()) {
-            System.out.println("Generando directorio en: " + rootDir.getParent() + " => " + rootDir.mkdir());
+            System.out.println("Creating directory on: " + rootDir.getParent() + " => " + rootDir.mkdir());
         }
     }
 
     private static void extractEmbeddedFiles(File file) throws IOException {
         String tempDir = "";
         String tempFileName = "";
-        // Generar directorio de extracción
+        // Creating extracting dir
         crearDirectorio(file, "Extracted");
 
         try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
@@ -287,7 +285,7 @@ public class JXboxDataSave {
                 int endOffset = -1;
                 String extension = "";
 
-                // Detectar PNG
+                // Detect PNG
                 if (buffer[i] == (byte) 0x89 && buffer[i + 1] == (byte) 0x50
                         && buffer[i + 2] == (byte) 0x4E && buffer[i + 3] == (byte) 0x47) {
                     fileType = "PNG";
@@ -301,7 +299,7 @@ public class JXboxDataSave {
                             break;
                         }
                     }
-                } // Detectar JPEG
+                } // Detect JPEG
                 else if (buffer[i] == (byte) 0xFF && buffer[i + 1] == (byte) 0xD8
                         && buffer[i + 2] == (byte) 0xFF) {
                     fileType = "JPEG";
@@ -312,7 +310,7 @@ public class JXboxDataSave {
                             break;
                         }
                     }
-                } // Detectar GIF
+                } // Detect GIF
                 else if (buffer[i] == (byte) 0x47 && buffer[i + 1] == (byte) 0x49
                         && buffer[i + 2] == (byte) 0x46 && buffer[i + 3] == (byte) 0x38) {
                     fileType = "GIF";
@@ -323,7 +321,7 @@ public class JXboxDataSave {
                             break;
                         }
                     }
-                } // Detectar directorio offset 0xC000-0xC02F , 0xC030 - 0xCFFF archivos
+                } // Detect directory offset 0xC000-0xC02F , 0xC030 - 0xCFFF files
                 else if (i == 0xC000) {
                     RandomAccessFile ranf = raf;
                     ranf.seek(0xC000L);
@@ -332,14 +330,13 @@ public class JXboxDataSave {
                     for (int j = 0; j < dataDir.length; j++) {
                         dataDir[j] = ranf.readByte();
                     }
-                    tempDir = new String(dataDir, StandardCharsets.UTF_8).replaceAll("[^a-zA-Z0-9\\\\s]", " ").trim();
-                    System.out.println("Directorio encontrado: " + dDsize + "\n");
-                    System.out.println(tempDir);
-                    System.out.println("");
+                    tempDir = new String(dataDir, StandardCharsets.UTF_8).replaceAll("[^a-zA-Z0-9\\\\s]", " ").trim();                    
+                    //System.out.println(tempDir);
+                    //System.out.println("");
                     endOffset = 0xC02F;
                     fileType = "DIR";
                     extension = "";
-                } // Detectar ficheros dentro de la carpeta
+                } // Detect file into dirs
                 else if (i == 0xC030) {
                     RandomAccessFile ranf = raf;
                     ranf.seek(0xC030L);
@@ -354,10 +351,10 @@ public class JXboxDataSave {
                     System.out.println("Nombre de fichero: "+tempFileName);
                     System.out.println("");
                     endOffset = 0xCFFF;
-                    fileType = "Fichero";
+                    fileType = "FILE";
                     extension = nfile.trim().substring(nfile.indexOf("."), nfile.indexOf(".") + 4);
                     System.out.println("extension: " + extension);
-                } // Detectar código incrustado 0xD000
+                } // Detect source code - 0xD000
                 else if (i == 0xD000) { // #if
                     String code = "";
                     for (int j = i; j < buffer.length - 2; j++) {
@@ -369,8 +366,8 @@ public class JXboxDataSave {
                             break;
                         }
                     }
-                    System.out.println("Código incrustado encontrado:\n" + code);
-                    fileType = "Código";
+                    System.out.println("Source Code found:\n" + code);
+                    fileType = "CODE";
                     extension = ".txt";
                 }
 
@@ -390,7 +387,7 @@ public class JXboxDataSave {
                         if (fileType.equals("DIR")) {                            
                             crearDirectorio(file, "Extracted" + File.separator + tempDir);
                             tempDir = file.getParent() + File.separator + "Extracted" + File.separator + tempDir;
-                        } else if (fileType.equals("Fichero")) {
+                        } else if (fileType.equals("FILE")) {
                             if (!tempDir.isEmpty()) {
                                 outputPath = tempDir + File.separator + tempFileName;
                                 try (FileOutputStream fos = new FileOutputStream(outputPath)) {
@@ -398,7 +395,7 @@ public class JXboxDataSave {
                                     System.out.println("  Extracted to: " + outputPath);
                                 }
                             }
-                        } else if(fileType.equals("Código")){
+                        } else if(fileType.equals("CODE")){
                             outputPath = file.getParent() + File.separator + "Extracted" + File.separator + "extracted_source_code_" + fileCount + extension;
                             try (FileOutputStream fos = new FileOutputStream(outputPath)) {
                                 fos.write(buffer, startOffset, fileSize);
@@ -414,7 +411,7 @@ public class JXboxDataSave {
                     } else {
                         System.out.println("  Skipped extraction.");
                     }
-                    i = endOffset - 1; // Saltar al final del archivo detectado
+                    i = endOffset - 1; // jump to EOF
                 }
             }
 
