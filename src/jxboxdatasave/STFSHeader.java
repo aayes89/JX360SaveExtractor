@@ -28,7 +28,7 @@ public class STFSHeader {
             raf.readFully(magicBytes);
             header.magic = new String(magicBytes).trim();
             if (!header.magic.equals("CON") && !header.magic.equals("LIVE") && !header.magic.equals("PIRS")) {
-                throw new IOException("No es un contenedor STFS válido: Magic encontrado = \"" + header.magic + "\"");
+                throw new IOException("Not valid STFS container: Magic found = \"" + header.magic + "\"");
             }
 
             // Title ID
